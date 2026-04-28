@@ -24,10 +24,10 @@ cp $SETUP_FILES/webserver/index.html /home/rhel/webserver/index.html
 cp $SETUP_FILES/webserver/Caddyfile /home/rhel/webserver/Caddyfile
 echo "Web content files copied" >> /tmp/progress.log
 
-# Pre-pull images to reduce wait time during lab
-podman pull registry.access.redhat.com/hi/caddy:latest
-podman pull registry.access.redhat.com/hi/curl:latest
-podman pull registry.access.redhat.com/hi/curl:latest-builder
+# Pre-pull images into rhel's rootless store to reduce wait time during lab
+su -l rhel -c "podman pull registry.access.redhat.com/hi/caddy:latest"
+su -l rhel -c "podman pull registry.access.redhat.com/hi/curl:latest"
+su -l rhel -c "podman pull registry.access.redhat.com/hi/curl:latest-builder"
 echo "Images pre-pulled" >> /tmp/progress.log
 
 rm -rf $TMPDIR
