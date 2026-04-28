@@ -1,0 +1,19 @@
+= Custom Certificates in Container Images
+
+This lab teaches how to embed custom Certificate Authority bundles into container
+images using multi-stage builds, enabling secure internal TLS communication.
+
+== Lab Overview
+
+Participants configure a TLS-enabled Caddy web server, extract its internal CA
+certificate, and create a custom curl image with the CA bundle embedded using the
+multi-stage build pattern.
+
+== Modules
+
+* Module 01: SSL-Enabled Caddy -- build and run a TLS server, extract the CA
+* Module 02: Custom CA Certificate -- embed the CA into a curl tool image
+
+== Duration
+
+12-15 minutes

@@ -1,0 +1,116 @@
+= Custom CA Certificate in curl
+
+.*Module Overview*
+[sidebar]
+--
+*Duration:* 6-8 minutes +
+*Learning Objectives:*
+
+* Use a multi-stage build to embed a custom CA bundle
+* Build a `curl` image with internal CA trust
+* Verify successful HTTPS communication to a server using an internal certificate
+--
+
+== Introduction
+
+In the previous module we extracted the CA certificate from our Caddy server. Now we'll embed it into a custom `curl` image using the same multi-stage build pattern. This approach keeps the CA bundle creation isolated to a builder stage and only ships the resulting trust store files in the final runtime image.
+
+This pattern applies to any application that needs to trust internal or custom certificates — not just `curl`.
+
+== Step 1: Write the Multi-Stage Containerfile
+
+The `curl:latest-builder` image includes the `trust` command-line tool needed to add CA bundles to the system trust store. We use it in a builder stage and then copy only the resulting PKI files into the smaller runtime image:
+
+[source,bash,role=execute,subs=attributes+]
+----
+cat > ~/Containerfile.pem << 'EOF'
+FROM {rhhi-registry}/curl:latest-builder as builder
+
+# Copy the certificate to the image
+COPY ca.pem /tmp/ <.>
+
+# Temporarily switch to root to add the CA certificate to the trust store
+USER root
+RUN trust anchor /tmp/ca.pem <.>
+USER ${CONTAINER_DEFAULT_USER}
+
+
+# Runtime stage:
+# Copy the trust store from the builder image to the runtime image
+FROM {rhhi-registry}/curl:latest
+COPY --from=builder /etc/pki/ca-trust/extracted /etc/pki/ca-trust/extracted <.>
+EOF
+----
+<.> Copy the custom CA PEM to the build stage
+<.> Add the CA to the system trust store using `trust anchor`
+<.> Only copy the PKI trust store files into the final image — not the CA PEM or build tools
+
+[NOTE]
+====
+The `trust anchor` command is the standard RHEL/Fedora mechanism for adding a CA to the system trust store. It updates the files under `/etc/pki/ca-trust/extracted/`, which OpenSSL and other tools use to validate certificates.
+====
+
+== Step 2: Build the Custom curl Image
+
+Build the image with the embedded CA bundle:
+
+[source,bash,role=execute]
+----
+podman build -t curl:local-ca -f ~/Containerfile.pem ~
+----
+
+Watch for two `FROM` stages in the output — the builder stage that runs `trust anchor`, and the runtime stage that copies the resulting trust store.
+
+== Step 3: Test Against the Caddy SSL Server
+
+With the certificate in place, the same HTTPS request that failed earlier should now succeed:
+
+[source,bash,role=execute]
+----
+podman run --net=host --rm -it curl:local-ca https://localhost:8443
+----
+
+You should see the HTML content from our `index.html` served over HTTPS — no certificate errors this time.
+
+[TIP]
+====
+If Caddy restarted between modules its internal CA may have regenerated. If you see a certificate error, re-run the `podman cp` and `cat` commands from module-01 to extract a fresh `ca.pem`, then rebuild this image.
+====
+
+== Step 4: Stop the Caddy Server
+
+Now that we've finished testing, stop the Caddy SSL container:
+
+[source,bash,role=execute]
+----
+podman stop caddy-ssl
+----
+
+== Summary
+
+You've completed the Custom Certificates lab. Here's what you accomplished:
+
+[IMPORTANT]
+====
+*Key Takeaways*
+
+*Multi-stage builds for CA bundles:*
+
+* The builder stage installs the `trust` tooling and runs `trust anchor` to update the system trust store
+* The runtime stage copies only `/etc/pki/ca-trust/extracted` — no extra tools, no CA PEM file in the final image
+* The pattern works identically whether the CA comes from an internal service like Caddy or from your organization's PKI
+
+*Applying this pattern to other images:*
+
+* Any application image that makes HTTPS connections to services using internal certificates can use this approach
+* Replace the `curl:latest-builder` and `curl:latest` base images with the builder and runtime variants of whichever Hardened Image your application uses
+* The `trust anchor` command and the copy of `/etc/pki/ca-trust/extracted` remain the same
+====
+
+++++
+<div class="solve-button-placeholder" data-module="module-02"></div>
+++++
+
+++++
+<div class="validate-button-placeholder" data-module="module-02"></div>
+++++

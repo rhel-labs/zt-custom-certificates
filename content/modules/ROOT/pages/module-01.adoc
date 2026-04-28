@@ -1,0 +1,142 @@
+= SSL-Enabled Caddy
+
+.*Module Overview*
+[sidebar]
+--
+*Duration:* 6-8 minutes +
+*Learning Objectives:*
+
+* Examine a TLS-enabled Caddy configuration
+* Build and run an SSL-enabled Caddy container
+* Understand certificate trust and how to extract a CA from a running container
+--
+
+== Introduction
+
+One of the common things developers need to deal with is custom SSL certificates. Organizations often have internal certificate authorities (CAs) that need to be trusted by applications running in containers. In this module, we configure a TLS-enabled Caddy web server, observe what happens when `curl` encounters an untrusted certificate, and extract the CA so we can embed it in our tools.
+
+== Step 1: Examine the SSL Configuration
+
+A Caddy configuration with TLS support is already in your `webserver` directory. Let's examine it:
+
+[source,bash,role=execute]
+----
+cat ~/webserver/Caddyfile
+----
+
+.*Expected output:*
+[source,caddyfile]
+----
+{
+    http_port 8080
+    https_port 8443 # <1>
+}
+
+localhost {
+    tls internal # <2>
+    root * /usr/share/caddy
+    file_server
+}
+----
+
+<1> *New SSL Port*: Caddy listens on HTTP (8080) and HTTPS (8443)
+<2> *Internal CA*: The `tls internal` directive tells Caddy to generate a self-signed certificate using its built-in CA
+
+The `root` and `file_server` directives are the same as a standard Caddy configuration — they tell Caddy where to find and serve files.
+
+== Step 2: Build the SSL-Enabled Caddy Image
+
+Create a Containerfile that packages the custom Caddyfile and content into a new image:
+
+[source,bash,role=execute,subs=attributes+]
+----
+cat > ~/webserver/Containerfile << 'EOF'
+FROM {rhhi-registry}/caddy:latest
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY index.html /usr/share/caddy/
+EOF
+----
+
+Now build the image:
+
+[source,bash,role=execute]
+----
+podman build -t caddy:ssl -f ~/webserver/Containerfile ~/webserver
+----
+
+== Step 3: Run the SSL Caddy Server
+
+Start the server and expose only the HTTPS port:
+
+[source,bash,role=execute]
+----
+podman run --rm -d --name caddy-ssl -p 8443:8443 -v ~/webserver:/usr/share/caddy:ro,Z caddy:ssl
+----
+
+== Step 4: Test with Containerized curl
+
+With the SSL-enabled Caddy server running, test it using the containerized `curl` image:
+
+[source,bash,role=execute,subs=attributes+]
+----
+podman run --net=host --rm -it {rhhi-registry}/curl https://localhost:8443
+----
+
+As expected, curl cannot verify the certificate because it was signed by Caddy's internal CA, which isn't in `curl`'s trust store:
+
+----
+curl: (60) SSL certificate OpenSSL verify result: unable to get local issuer certificate (20)
+More details here: https://curl.se/docs/sslcerts.html
+
+curl failed to verify the legitimacy of the server and therefore could not
+establish a secure connection to it. To learn more about this situation and
+how to fix it, please visit the webpage mentioned above.
+----
+
+[NOTE]
+====
+This is the expected behavior. The certificate is valid — it's just signed by a CA that `curl` doesn't trust yet. In the next module, we'll embed that CA into a custom `curl` image.
+====
+
+== Step 5: Extract the CA Certificate and Key
+
+Caddy stores its generated CA files inside the running container. We can copy them out using `podman cp`:
+
+[source,bash,role=execute]
+----
+podman cp caddy-ssl:/data/caddy/pki/authorities/local/root.key .
+----
+
+[source,bash,role=execute]
+----
+podman cp caddy-ssl:/data/caddy/pki/authorities/local/root.crt .
+----
+
+Combine the key and certificate into a single PEM file, which is the standard format for CA bundles:
+
+[source,bash,role=execute]
+----
+cat root.key root.crt > ca.pem
+----
+
+[TIP]
+====
+In a real organization, you would receive this PEM file from your IT security team rather than extracting it from a running container. The process of embedding it in your image is identical either way.
+====
+
+Verify the files are in place:
+
+[source,bash,role=execute]
+----
+ls -la root.key root.crt ca.pem
+----
+
+You now have the CA bundle needed to build a trusted `curl` image in the next module.
+
+++++
+<div class="solve-button-placeholder" data-module="module-01"></div>
+++++
+
+++++
+<div class="validate-button-placeholder" data-module="module-01"></div>
+++++

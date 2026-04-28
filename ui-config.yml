@@ -1,0 +1,17 @@
+---
+
+antora:
+  name: modules
+  dir: www
+  modules:
+    - name: module-01
+      label: "SSL-Enabled Caddy"
+      solveButton: false
+    - name: module-02
+      label: "Custom CA Certificate"
+      solveButton: false
+
+tabs:
+  - name: ">_ terminal"
+    url: /wetty
+
