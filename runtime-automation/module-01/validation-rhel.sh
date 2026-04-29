@@ -1,15 +1,15 @@
 #!/bin/sh
 echo "Validating module-01" >> /tmp/progress.log
 
-if ! runuser -u rhel -- podman image exists localhost/caddy:ssl; then
+if ! runuser -u rhel -- podman image exists localhost/caddy:ssl 2>/dev/null; then
     echo "FAIL: Image localhost/caddy:ssl not found" >> /tmp/progress.log
-    echo "HINT: Build the image with: podman build -t caddy:ssl -f ~/webserver/Containerfile ~/webserver" >> /tmp/progress.log
+    echo "HINT: Did you complete Step 2 to build the caddy:ssl image?" >> /tmp/progress.log
     exit 1
 fi
 
 if [ ! -f /home/rhel/ca.pem ]; then
     echo "FAIL: ca.pem not found in home directory" >> /tmp/progress.log
-    echo "HINT: Extract the CA from the running caddy-ssl container with podman cp, then combine with: cat root.key root.crt > ca.pem" >> /tmp/progress.log
+    echo "HINT: Did you complete Step 5? Extract root.key and root.crt from the running container and combine them into ca.pem" >> /tmp/progress.log
     exit 1
 fi
 
